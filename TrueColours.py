@@ -96,8 +96,9 @@ class TrueColours:
         for player in self.players.keys():
             try:
                 votes = [self.players[player]["vote1"], self.players[player]["vote2"]]
-                voted_player_id = self.colour_lookup[vote]
-                self.players[voted_player_id]["votes"] += 1
+                for vote in votes:
+                    voted_player_id = self.colour_lookup[vote]
+                    self.players[voted_player_id]["votes"] += 1
             except:
                 continue
 
