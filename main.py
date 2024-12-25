@@ -185,7 +185,7 @@ async def prompt_voting(game: TrueColours, round_num):
         vote1_msg = await dm_channel.send("Vote 1")
         vote2_msg = await dm_channel.send("Vote 2")
 
-        initial_msg.add_reaction("☑️")
+        await initial_msg.add_reaction("☑️")
         for colour in game.colour_lookup.keys():
             if colour == game.players[player]["colour"]:
                 continue
