@@ -1,4 +1,4 @@
-from threading import Event
+from asyncio import Event
 import json
 import os
 import random
@@ -104,11 +104,11 @@ class TrueColours:
     def add_prediction(self, player_id, prediction):
         self.players[player_id]["prediction"] = prediction
 
-    def tally_votes(self):
+    async def tally_votes(self):
         """
         Count vote1 and vote2 from each player and tally into respective self.players "votes"
         """
-        self.wait_next.wait()
+        await self.wait_next.wait()
         for player in self.players.keys():
             try:
                 votes = [self.players[player]["vote1"], self.players[player]["vote2"]]

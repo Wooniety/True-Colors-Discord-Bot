@@ -85,13 +85,14 @@ async def voteHandler(
 ):
     player = game.vote_ids[vote_id][0]
     vote = reaction.emoji
-    if vote == "☑️":
-        game.lock_vote(player)
-        return
+
     vote_num = 0
     confirm_msg = ""
 
-    if game.vote_ids[vote_id][1] == 1:
+    if game.vote_ids[vote_id][1] == 0:
+        game.lock_vote(player)
+        return
+    elif game.vote_ids[vote_id][1] == 1:
         result = game.add_vote_1(player, vote)
         vote_num = 1
     else:
@@ -112,6 +113,7 @@ async def predictionHandler(
     reaction: discord.Reaction, user: discord.User, game: TrueColours
 ):
     if reaction.emoji not in prediction_emojis.keys():
+        game.wait_next.set()
         return
 
     prediction = prediction_emojis[reaction.emoji]
@@ -186,6 +188,7 @@ async def prompt_voting(game: TrueColours, round_num):
         vote2_msg = await dm_channel.send("Vote 2")
 
         await initial_msg.add_reaction("☑️")
+        game.vote_ids[initial_msg.id] = [player, 0]
         for colour in game.colour_lookup.keys():
             if colour == game.players[player]["colour"]:
                 continue
@@ -212,15 +215,8 @@ async def prompt_prediction(ctx, game: TrueColours, round_num):
     for emoji in prediction_emojis.keys():
         await prompt_msg.add_reaction(emoji)
     await prompt_msg.add_reaction("⏩")
-
-    try:
-        # Wait for a reaction from the user
-        reaction, user = await bot.wait_for(
-            "reaction_add", timeout=1000.0, check=cnt_check
-        )
-    except TimeoutError:
-        await ctx.send("Moving onto predictions")
-
+    await game.wait_next.wait()
+    game.wait_next.clear()
 
 def gen_round_results_msg(game: TrueColours):
     results = ""
@@ -244,20 +240,11 @@ async def run_game_round(ctx, game: TrueColours, round_num):
 
     # Vote
     await prompt_voting(game, round_num)
-    game.tally_votes()
+    await game.tally_votes()
     game.determine_round_result()
 
     finish_voting_msg = await ctx.send("Click me when everyone is done")
     await finish_voting_msg.add_reaction("⏩")
-
-    # Predictions
-    try:
-        # Wait for a reaction from the user
-        reaction, user = await bot.wait_for(
-            "reaction_add", timeout=1000.0, check=cnt_check
-        )
-    except TimeoutError:
-        await ctx.send("Moving onto predictions")
 
     await finish_voting_msg.delete()
     await prompt_prediction(ctx, game, round_num)
