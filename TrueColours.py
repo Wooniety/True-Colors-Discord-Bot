@@ -1,3 +1,4 @@
+from threading import Event
 import json
 import os
 import random
@@ -9,6 +10,7 @@ class TrueColours:
     def __init__(self, join_msg, channel_id) -> None:
         self.channel_id = channel_id
         self.join_msg_id = join_msg
+        self.wait_next = Event()
         self.players = {}
         self.curr_qn = ""
         self.questions = []
@@ -39,8 +41,10 @@ class TrueColours:
         """
         self.vote_ids = {}
         self.prediction_id = ""
+        self.wait_next.clear()
 
         for player in self.players.keys():
+            self.players[player]["lock_vote"] = False
             self.players[player]["vote1"] = ""
             self.players[player]["vote2"] = ""
             self.players[player]["prediction"] = ""
@@ -80,11 +84,22 @@ class TrueColours:
     def add_point(self, player_id, points):
         self.players[player_id]["points"] += points
 
+    def lock_vote(self, player_id):
+        self.players[player_id]["lock_vote"] = True
+        if all(map(lambda x: x["lock_vote"], self.players.values())):
+            self.wait_next.set()
+
     def add_vote_1(self, player_id, vote):
+        if self.players[player_id]["lock_vote"]:
+            return False
         self.players[player_id]["vote1"] = vote
+        return True
 
     def add_vote_2(self, player_id, vote):
+        if self.players[player_id]["lock_vote"]:
+            return False
         self.players[player_id]["vote2"] = vote
+        return True
 
     def add_prediction(self, player_id, prediction):
         self.players[player_id]["prediction"] = prediction
@@ -93,6 +108,7 @@ class TrueColours:
         """
         Count vote1 and vote2 from each player and tally into respective self.players "votes"
         """
+        self.wait_next.wait()
         for player in self.players.keys():
             try:
                 votes = [self.players[player]["vote1"], self.players[player]["vote2"]]
@@ -101,6 +117,7 @@ class TrueColours:
                     self.players[voted_player_id]["votes"] += 1
             except:
                 continue
+        self.wait_next.clear()
 
     def determine_round_result(self):
         """

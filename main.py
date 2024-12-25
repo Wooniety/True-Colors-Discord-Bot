@@ -85,17 +85,24 @@ async def voteHandler(
 ):
     player = game.vote_ids[vote_id][0]
     vote = reaction.emoji
+    if vote == "☑️":
+        game.lock_vote(player)
+        return
     vote_num = 0
     confirm_msg = ""
 
     if game.vote_ids[vote_id][1] == 1:
-        game.add_vote_1(player, vote)
+        result = game.add_vote_1(player, vote)
         vote_num = 1
     else:
-        game.add_vote_2(player, vote)
+        result = game.add_vote_2(player, vote)
         vote_num = 2
 
     dm_channel = await user.create_dm()
+    if not result:
+        await dm_channel.send("Vote is already locked!")
+        return
+
     confirm_msg = f"Vote {vote_num}: {vote}"
     print(f"{user.display_name} vote {vote_num}: {vote} {str(vote)}")
     await dm_channel.send(confirm_msg)
@@ -174,10 +181,11 @@ async def prompt_voting(game: TrueColours, round_num):
         msg = (
             f"\n**Round {round_num}/10**\n*{game.curr_qn}*{gen_list_of_players(game)}\n"
         )
-        await dm_channel.send(msg)
+        initial_msg = await dm_channel.send(msg)
         vote1_msg = await dm_channel.send("Vote 1")
         vote2_msg = await dm_channel.send("Vote 2")
 
+        initial_msg.add_reaction("☑️")
         for colour in game.colour_lookup.keys():
             if colour == game.players[player]["colour"]:
                 continue
