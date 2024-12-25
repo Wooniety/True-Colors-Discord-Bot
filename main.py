@@ -173,9 +173,9 @@ async def creategame(ctx: commands.Context):
     view = discord.ui.View()
     for emoji in colour_emojis:
         button = discord.ui.Button(
+            **DEFAULT_BUTTON_PARAMS,
             custom_id=f"JOIN_GAME|{emoji}",
             emoji=emoji,
-            *DEFAULT_BUTTON_PARAMS
         )
         view.add_item(button)
 
@@ -197,9 +197,9 @@ async def prompt_voting(ctx: commands.Context, game: TrueColours, round_num):
     view = discord.ui.View()
     for emoji in colour_emojis:
         button = discord.ui.Button(
+            **DEFAULT_BUTTON_PARAMS,
             custom_id=f"JOIN_GAME|{emoji}",
             emoji=emoji,
-            *DEFAULT_BUTTON_PARAMS
         )
         view.add_item(button)
 
@@ -207,7 +207,7 @@ async def prompt_voting(ctx: commands.Context, game: TrueColours, round_num):
         f"\n**Round {round_num}/10**\n*{game.curr_qn}*{gen_list_of_players(game)}\n"
     )
     view = discord.ui.View()
-    view.add_item(discord.ui.Button(custom_id="VOTE|☑️", emoji="☑️", *DEFAULT_BUTTON_PARAMS))
+    view.add_item(discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id="VOTE|☑️", emoji="☑️"))
     msg = await ctx.send(msg, view=view)
     game.vote_ids[msg.id] = [0]
 
@@ -215,9 +215,9 @@ async def prompt_voting(ctx: commands.Context, game: TrueColours, round_num):
         view = discord.ui.View()
         for colour in game.colour_lookup.keys():
             button = discord.ui.Button(
+                **DEFAULT_BUTTON_PARAMS,
                 custom_id=f"VOTE|{colour}",
-                emoji=colour,
-                *DEFAULT_BUTTON_PARAMS
+                emoji=colour
             )
             view.add_item(button)
         vote_msg = await ctx.send(f"Vote {idx}", view=view)
@@ -231,12 +231,12 @@ async def prompt_prediction(ctx, game: TrueColours, round_num):
     view = discord.ui.View()
     for emoji in prediction_emojis.keys():
         button = discord.ui.Button(
+            **DEFAULT_BUTTON_PARAMS,
             custom_id=f"PREDICT|{emoji}",
-            emoji=emoji,
-            *DEFAULT_BUTTON_PARAMS
+            emoji=emoji
         )
         view.add_item(button)
-    button = discord.ui.Button(custom_id=f"PREDICT|⏩", emoji="⏩", *DEFAULT_BUTTON_PARAMS)
+    button = discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id=f"PREDICT|⏩", emoji="⏩")
     view.add_item(button)
 
     prompt_msg = await ctx.send(
