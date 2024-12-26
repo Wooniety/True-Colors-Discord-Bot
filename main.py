@@ -21,45 +21,26 @@ bot = commands.Bot(command_prefix="$", intents=intents)
 
 colour_emojis = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
 prediction_emojis = {"💕": "most", "💓": "some", "💔": "none"}
-games = []
-
+games = {}
 
 @bot.event
 async def on_ready():
     print(f"We have logged in as {bot.user}")
 
-
-def getGameByJoinId(id):
-    for game in games:
-        if game.join_msg_id == id:
-            return game
-
-    return None
-
-
 def getGameByChannel(id):
-    for game in games:
-        if game.channel_id == id:
-            return game
+    return games.get(id)
 
-    return None
+def getGameByJoinId(channel_id, id):
+    game = getGameByChannel(channel_id)
+    return game if game is None or game.join_msg_id == id else None
 
+def getGameByVoteId(channel_id, id):
+    game = getGameByChannel(channel_id)
+    return game if game is None or id in game.vote_ids.keys() else None
 
-def getGameByVoteId(id):
-    for game in games:
-        if id in game.vote_ids.keys():
-            return game
-
-    return None
-
-
-def getGameByPredictionId(id):
-    for game in games:
-        if id == game.prediction_id:
-            return game
-
-    return None
-
+def getGameByPredictionId(channel_id, id):
+    game = getGameByChannel(channel_id)
+    return game if game is None or id == game.prediction_id else None
 
 async def joinGameHandler(
     interaction: discord.Interaction, emoji: str, user: discord.User | discord.Member, game: TrueColours
@@ -144,18 +125,19 @@ async def on_interaction(interaction: discord.Interaction):
         return
 
     action, value = action
+    channel_id = interaction.channel_id
     msg_id = interaction.message.id
 
     if action == "JOIN_GAME":
-        game = getGameByJoinId(msg_id)
+        game = getGameByJoinId(channel_id, msg_id)
         if game != None:
             await joinGameHandler(interaction, value, user, game)
     elif action == "VOTE":
-        game = getGameByVoteId(msg_id)
+        game = getGameByVoteId(channel_id, msg_id)
         if game != None:
             await voteHandler(interaction, value, user, game, msg_id)
     elif action == "PREDICT":
-        game = getGameByPredictionId(msg_id)
+        game = getGameByPredictionId(channel_id, msg_id)
         if game != None:
             await predictionHandler(interaction, value, user, game)
 
@@ -168,6 +150,10 @@ async def creategame(ctx: commands.Context):
         return  # Ignore messages from other bots
 
     # Send a message to start the game
+    channel_id = ctx.channel.id
+    if channel_id in games:
+        await ctx.send("There is already a game running!")
+        return
 
     # Add reactions to the message
     view = discord.ui.View()
@@ -181,8 +167,7 @@ async def creategame(ctx: commands.Context):
 
     # Setup game
     create_message = await ctx.send("Game started! Please pick a colour.", view=view)
-    games.append(TrueColours(create_message.id, create_message.channel.id))
-
+    games[channel_id] = TrueColours(create_message.id, channel_id)
 
 def gen_list_of_players(game: TrueColours):
     player_list_str = ""
@@ -310,6 +295,14 @@ async def startgame(ctx: commands.Context):
         return  # Ignore messages from other bots
 
     game = getGameByChannel(ctx.message.channel.id)
+    if game is None:
+        await ctx.send("Use creategame to create a game first!")
+        return
+
+    if len(game.players) == 0:
+        await ctx.send("No players to start game!")
+        return
+
     for i in range(10):
         await run_game_round(ctx, game, i + 1)
 
