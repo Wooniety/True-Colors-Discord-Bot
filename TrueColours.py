@@ -5,11 +5,15 @@ import random
 
 import discord
 
+QNS_FILE = "questions.json"
+QNS_FILE = os.path.abspath(QNS_FILE)
+with open(QNS_FILE, "r") as f:
+    QUESTIONS = json.load(f)["questions"]
 
 class TrueColours:
-    def __init__(self, join_msg, channel_id) -> None:
+    def __init__(self, join_msg_id, channel_id) -> None:
         self.channel_id = channel_id
-        self.join_msg_id = join_msg
+        self.join_msg_id = join_msg_id
         self.wait_next = Event()
         self.players = {}
         self.curr_qn = ""
@@ -23,11 +27,7 @@ class TrueColours:
         self.load_qn_bank()
 
     def load_qn_bank(self):
-        qn_json = "questions.json"
-        qn_json = os.path.abspath(qn_json)
-        with open(qn_json, "r") as f:
-            data = json.load(f)
-        self.questions = data["questions"]
+        self.questions = QUESTIONS
 
     def start_game(self):
         # Reset players
