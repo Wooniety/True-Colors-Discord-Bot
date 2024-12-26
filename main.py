@@ -190,6 +190,7 @@ async def prompt_voting(ctx: commands.Context, game: TrueColours, round_num):
 
     msg = (
         f"\n**Round {round_num}/10**\n*{game.curr_qn}*{gen_list_of_players(game)}\n"
+        "Once you have voted, click to ☑️ lock your votes!"
     )
     view = discord.ui.View()
     view.add_item(discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id="VOTE|☑️", emoji="☑️"))
