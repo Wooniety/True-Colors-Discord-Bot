@@ -196,15 +196,16 @@ async def prompt_voting(ctx: commands.Context, game: TrueColours, round_num):
     msg = await ctx.send(msg, view=view)
     game.vote_ids[msg.id] = [0]
 
+    view = discord.ui.View()
+    for colour in game.colour_lookup.keys():
+        button = discord.ui.Button(
+            **DEFAULT_BUTTON_PARAMS,
+            custom_id=f"VOTE|{colour}",
+            emoji=colour
+        )
+        view.add_item(button)
+
     for idx in range(1, 3):
-        view = discord.ui.View()
-        for colour in game.colour_lookup.keys():
-            button = discord.ui.Button(
-                **DEFAULT_BUTTON_PARAMS,
-                custom_id=f"VOTE|{colour}",
-                emoji=colour
-            )
-            view.add_item(button)
         vote_msg = await ctx.send(f"Vote {idx}", view=view)
         game.vote_ids[vote_msg.id] = [idx]
 
