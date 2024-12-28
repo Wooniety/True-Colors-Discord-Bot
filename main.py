@@ -1,10 +1,9 @@
-import os
-from dotenv import load_dotenv
-
-import discord
-from discord.ext import commands
-
 from TrueColours import TrueColours
+from discord.ext import commands
+from dotenv import load_dotenv
+from typing import Union
+import discord
+import os
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -43,7 +42,7 @@ def getGameByPredictionId(channel_id, id):
     return game if game is None or id == game.prediction_id else None
 
 async def joinGameHandler(
-    interaction: discord.Interaction, emoji: str, user: discord.User | discord.Member, game: TrueColours
+    interaction: discord.Interaction, emoji: str, user: Union[discord.User, discord.Member], game: TrueColours
 ):
     if interaction.message is None:
         return
@@ -68,7 +67,7 @@ async def joinGameHandler(
 
 
 async def voteHandler(
-    interaction: discord.Interaction, emoji: str, user: discord.User | discord.Member, game: TrueColours, vote_id
+    interaction: discord.Interaction, emoji: str, user: Union[discord.User, discord.Member], game: TrueColours, vote_id
 ):
     vote_num = 0
     confirm_msg = ""
@@ -99,7 +98,7 @@ async def voteHandler(
 
 
 async def predictionHandler(
-    interaction: discord.Interaction, emoji: str, user: discord.User | discord.Member, game: TrueColours
+    interaction: discord.Interaction, emoji: str, user: Union[discord.User, discord.Member], game: TrueColours
 ):
     if emoji not in prediction_emojis.keys():
         prediction = game.get_prediction(user.id)

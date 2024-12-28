@@ -1,4 +1,5 @@
 from asyncio import Event
+from typing import Union
 import json
 import os
 import random
@@ -66,7 +67,7 @@ class TrueColours:
     def add_colour_lookup(self, player_id, colour):
         self.colour_lookup[colour] = player_id
 
-    def add_player(self, player_id, player_name, colour, user: discord.User | discord.Member):
+    def add_player(self, player_id, player_name, colour, user: Union[discord.User, discord.Member]):
         self.players[player_id] = {
             "user": user,
             "name": player_name,
