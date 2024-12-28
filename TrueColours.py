@@ -111,9 +111,14 @@ class TrueColours:
         return True
     
     def add_skipper(self, player_id):
+        if player_id in self.skippers:
+            return False
+
         self.skippers.add(player_id)
         if len(self.skippers) == len(self.players):
             self.wait_next.set()
+
+        return True
 
     def add_prediction(self, player_id, prediction):
         if self.players[player_id]["lock_vote"]:
