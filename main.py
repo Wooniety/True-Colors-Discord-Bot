@@ -264,6 +264,7 @@ async def run_game_round(ctx: commands.Context, game: TrueColours, round_num):
 
     results = gen_round_results_msg(game)
     await ctx.send(f"\n**Round {round_num}/10 results:**{results}\n")
+    del games[game.channel_id]
 
 
 def gen_scoreboard(game):
