@@ -115,6 +115,9 @@ async def predictionHandler(
     game.add_prediction(user.id, prediction)
     await interaction.response.send_message(f"Your vote has been registered, click ⏩ to lock it in!", ephemeral=True)
 
+async def skipHandler(user: Union[discord.User, discord.Member], game: TrueColours):
+    game.add_skipper(user.id)
+
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     action = interaction.data.get("custom_id", "")
@@ -131,6 +134,10 @@ async def on_interaction(interaction: discord.Interaction):
         game = getGameByJoinId(channel_id, msg_id)
         if game != None:
             await joinGameHandler(interaction, value, user, game)
+    elif action == "SKIP":
+        game = getGameByVoteId(channel_id, msg_id)
+        if game != None:
+            await skipHandler(user, game)
     elif action == "VOTE":
         game = getGameByVoteId(channel_id, msg_id)
         if game != None:
@@ -178,21 +185,13 @@ def gen_list_of_players(game: TrueColours):
 
 
 async def prompt_voting(ctx: commands.Context, game: TrueColours, round_num):
-    view = discord.ui.View()
-    for emoji in colour_emojis:
-        button = discord.ui.Button(
-            **DEFAULT_BUTTON_PARAMS,
-            custom_id=f"JOIN_GAME|{emoji}",
-            emoji=emoji,
-        )
-        view.add_item(button)
-
     msg = (
         f"\n**Round {round_num}/10**\n*{game.curr_qn}*{gen_list_of_players(game)}\n"
         "Once you have voted, click to ☑️ lock your votes!"
     )
     view = discord.ui.View()
     view.add_item(discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id="VOTE|☑️", emoji="☑️"))
+    view.add_item(discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id="SKIP|", emoji="⏩"))
     msg = await ctx.send(msg, view=view)
     game.vote_ids[msg.id] = [0]
 
@@ -222,7 +221,7 @@ async def prompt_prediction(ctx, game: TrueColours, round_num):
             emoji=emoji
         )
         view.add_item(button)
-    button = discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id=f"PREDICT|⏩", emoji="⏩")
+    button = discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id=f"PREDICT|☑️", emoji="☑️")
     view.add_item(button)
 
     prompt_msg = await ctx.send(
@@ -253,7 +252,11 @@ async def run_game_round(ctx: commands.Context, game: TrueColours, round_num):
 
     # Vote
     await prompt_voting(ctx, game, round_num)
-    await game.tally_votes()
+    tallied = await game.tally_votes()
+    if not tallied:
+        # must have skipped
+        await ctx.send("Question has been skipped!")
+        return False
     game.determine_round_result()
 
     await prompt_prediction(ctx, game, round_num)
@@ -264,7 +267,7 @@ async def run_game_round(ctx: commands.Context, game: TrueColours, round_num):
 
     results = gen_round_results_msg(game)
     await ctx.send(f"\n**Round {round_num}/10 results:**{results}\n")
-
+    return True
 
 def gen_scoreboard(game):
     msg = "\n**SCOREBOARD**"
@@ -304,8 +307,10 @@ async def startgame(ctx: commands.Context):
         await ctx.send("No players to start game!")
         return
 
-    for i in range(10):
-        await run_game_round(ctx, game, i + 1)
+    i = 0
+    while i < 10:
+        if await run_game_round(ctx, game, i + 1):
+            i += 1
 
     msg = gen_scoreboard(game)
     await ctx.send(msg)

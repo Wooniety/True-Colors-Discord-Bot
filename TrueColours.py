@@ -16,6 +16,7 @@ class TrueColours:
         self.channel_id = channel_id
         self.join_msg_id = join_msg_id
         self.wait_next = Event()
+        self.skippers = set()
         self.players = {}
         self.curr_qn = ""
         self.questions = []
@@ -42,6 +43,7 @@ class TrueColours:
         """
         self.vote_ids = {}
         self.prediction_id = ""
+        self.skippers.clear()
         self.wait_next.clear()
 
         for player in self.players.keys():
@@ -107,6 +109,11 @@ class TrueColours:
             return False
         self.players[player_id]["vote2"] = vote
         return True
+    
+    def add_skipper(self, player_id):
+        self.skippers.add(player_id)
+        if len(self.skippers) == len(self.players):
+            self.wait_next.set()
 
     def add_prediction(self, player_id, prediction):
         if self.players[player_id]["lock_vote"]:
@@ -122,6 +129,10 @@ class TrueColours:
         Count vote1 and vote2 from each player and tally into respective self.players "votes"
         """
         await self.wait_next.wait()
+        if len(self.skippers) == len(self.players):
+            self.wait_next.clear()
+            return False
+
         for player in self.players.keys():
             try:
                 votes = [self.players[player]["vote1"], self.players[player]["vote2"]]
@@ -133,6 +144,7 @@ class TrueColours:
             finally:
                 self.players[player]["lock_vote"] = False
         self.wait_next.clear()
+        return True
 
     def determine_round_result(self):
         """
