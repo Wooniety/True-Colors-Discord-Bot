@@ -8,6 +8,9 @@ from TrueColours import TrueColours
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+DEFAULT_BUTTON_PARAMS = {
+    "style": discord.ButtonStyle.secondary
+}
 
 intents = discord.Intents.default()
 intents.members = True
@@ -18,137 +21,128 @@ bot = commands.Bot(command_prefix="$", intents=intents)
 
 colour_emojis = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
 prediction_emojis = {"💕": "most", "💓": "some", "💔": "none"}
-games = []
-
+games = {}
 
 @bot.event
 async def on_ready():
     print(f"We have logged in as {bot.user}")
 
-
-def getGameByJoinId(id):
-    for game in games:
-        if game.join_msg_id == id:
-            return game
-
-    return None
-
-
 def getGameByChannel(id):
-    for game in games:
-        if game.channel_id == id:
-            return game
+    return games.get(id)
 
-    return None
+def getGameByJoinId(channel_id, id):
+    game = getGameByChannel(channel_id)
+    return game if game is None or game.join_msg_id == id else None
 
+def getGameByVoteId(channel_id, id):
+    game = getGameByChannel(channel_id)
+    return game if game is None or id in game.vote_ids.keys() else None
 
-def getGameByVoteId(id):
-    for game in games:
-        if id in game.vote_ids.keys():
-            return game
-
-    return None
-
-
-def getGameByPredictionId(id):
-    for game in games:
-        if id == game.prediction_id:
-            return game
-
-    return None
-
+def getGameByPredictionId(channel_id, id):
+    game = getGameByChannel(channel_id)
+    return game if game is None or id == game.prediction_id else None
 
 async def joinGameHandler(
-    reaction: discord.Reaction, user: discord.User, game: TrueColours
+    interaction: discord.Interaction, emoji: str, user: discord.User | discord.Member, game: TrueColours
 ):
+    if interaction.message is None:
+        return
+
     # Check if player is in game
     if user.id in game.players.keys():
-        await reaction.message.channel.send(f"{user.mention} is already in game!")
+        await interaction.response.send_message(f"{user.mention} is already in game!")
         return
 
     # Check if colour has already been picked
-    if reaction.emoji in game.colour_lookup.keys():
-        await reaction.message.channel.send(
+    if emoji in game.colour_lookup.keys():
+        await interaction.response.send_message(
             f"{user.mention}, that colour has already been picked!"
         )
         return
 
-    if str(reaction.emoji) in colour_emojis:
-        game.add_player(user.id, user.display_name, reaction.emoji, user)
-        await reaction.message.channel.send(
-            f"{user.mention} has joined the game with the color {reaction.emoji}!"
+    if emoji in colour_emojis:
+        game.add_player(user.id, user.display_name, emoji, user)
+        await interaction.response.send_message(
+            f"{user.mention} has joined the game with the color {emoji}!"
         )
 
 
 async def voteHandler(
-    reaction: discord.Reaction, user: discord.User, game: TrueColours, vote_id
+    interaction: discord.Interaction, emoji: str, user: discord.User | discord.Member, game: TrueColours, vote_id
 ):
-    player = game.vote_ids[vote_id][0]
-    vote = reaction.emoji
-
     vote_num = 0
     confirm_msg = ""
 
-    if game.vote_ids[vote_id][1] == 0:
-        game.lock_vote(player)
+    if game.vote_ids[vote_id][0] == 0:
+        game.lock_vote(user.id)
+        await interaction.response.send_message("Voting is locked!", ephemeral=True)
         return
-    elif game.vote_ids[vote_id][1] == 1:
-        result = game.add_vote_1(player, vote)
+
+    if emoji == game.players[user.id]["colour"]:
+        await interaction.response.send_message("You cannot vote for yourself!", ephemeral=True)
+        return
+
+    if game.vote_ids[vote_id][0] == 1:
+        result = game.add_vote_1(user.id, emoji)
         vote_num = 1
     else:
-        result = game.add_vote_2(player, vote)
+        result = game.add_vote_2(user.id, emoji)
         vote_num = 2
 
-    dm_channel = await user.create_dm()
     if not result:
-        await dm_channel.send("Vote is already locked!")
+        await interaction.response.send_message("Vote is already locked!", ephemeral=True)
         return
 
-    confirm_msg = f"Vote {vote_num}: {vote}"
-    print(f"{user.display_name} vote {vote_num}: {vote} {str(vote)}")
-    await dm_channel.send(confirm_msg)
+    confirm_msg = f"Vote {vote_num}: {emoji}"
+    print(f"{user.display_name} vote {vote_num}: {emoji} {str(emoji)}")
+    await interaction.response.send_message(confirm_msg, ephemeral=True)
 
 
 async def predictionHandler(
-    reaction: discord.Reaction, user: discord.User, game: TrueColours
+    interaction: discord.Interaction, emoji: str, user: discord.User | discord.Member, game: TrueColours
 ):
-    if reaction.emoji not in prediction_emojis.keys():
-        game.wait_next.set()
+    if emoji not in prediction_emojis.keys():
+        prediction = game.get_prediction(user.id)
+        if prediction == "":
+            await interaction.response.send_message(f"You cannot lock your vote without voting!", ephemeral=True)
+            return
+
+        result = game.lock_vote(user.id)
+        if result:
+            await interaction.response.send_message(f"{user.mention} has voted!")
         return
 
-    prediction = prediction_emojis[reaction.emoji]
+    prediction = prediction_emojis[emoji]
     game.add_prediction(user.id, prediction)
-    await reaction.message.channel.send(f"{user.mention} has voted!")
-
+    await interaction.response.send_message(f"Your vote has been registered, click ⏩ to lock it in!", ephemeral=True)
 
 @bot.event
-async def on_reaction_add(reaction: discord.Reaction, user: discord.User):
-    if user.bot:
+async def on_interaction(interaction: discord.Interaction):
+    action = interaction.data.get("custom_id", "")
+    action = action.split('|')
+    user = interaction.user
+    if len(action) != 2 or interaction.message is None or user is None:
         return
 
-    msg_id = reaction.message.id
+    action, value = action
+    channel_id = interaction.channel_id
+    msg_id = interaction.message.id
 
-    # Join game
-    game = getGameByJoinId(msg_id)
-    if game != None:
-        await joinGameHandler(reaction, user, game)
-        return
-
-    # Submit vote
-    game = getGameByVoteId(msg_id)
-    if game != None:
-        await voteHandler(reaction, user, game, msg_id)
-        return
-
-    # Submit prediction
-    game = getGameByPredictionId(msg_id)
-    if game != None:
-        await predictionHandler(reaction, user, game)
-        return
-
+    if action == "JOIN_GAME":
+        game = getGameByJoinId(channel_id, msg_id)
+        if game != None:
+            await joinGameHandler(interaction, value, user, game)
+    elif action == "VOTE":
+        game = getGameByVoteId(channel_id, msg_id)
+        if game != None:
+            await voteHandler(interaction, value, user, game, msg_id)
+    elif action == "PREDICT":
+        game = getGameByPredictionId(channel_id, msg_id)
+        if game != None:
+            await predictionHandler(interaction, value, user, game)
 
 @bot.command()
-async def creategame(ctx):
+async def creategame(ctx: commands.Context):
     if ctx.guild is None:
         await ctx.send("This command can only be used in a server.")
         return
@@ -156,15 +150,24 @@ async def creategame(ctx):
         return  # Ignore messages from other bots
 
     # Send a message to start the game
-    create_message = await ctx.send("Game started! Please pick a colour.")
+    channel_id = ctx.channel.id
+    if channel_id in games:
+        await ctx.send("There is already a game running!")
+        return
 
     # Add reactions to the message
+    view = discord.ui.View()
     for emoji in colour_emojis:
-        await create_message.add_reaction(emoji)
+        button = discord.ui.Button(
+            **DEFAULT_BUTTON_PARAMS,
+            custom_id=f"JOIN_GAME|{emoji}",
+            emoji=emoji,
+        )
+        view.add_item(button)
 
     # Setup game
-    games.append(TrueColours(create_message.id, create_message.channel.id))
-
+    create_message = await ctx.send("Game started! Please pick a colour.", view=view)
+    games[channel_id] = TrueColours(create_message.id, channel_id)
 
 def gen_list_of_players(game: TrueColours):
     player_list_str = ""
@@ -175,48 +178,60 @@ def gen_list_of_players(game: TrueColours):
     return player_list_str
 
 
-async def prompt_voting(game: TrueColours, round_num):
-    for player in game.players.keys():
-        user = game.players[player]["user"]
-        dm_channel = await user.create_dm()
-
-        msg = (
-            f"\n**Round {round_num}/10**\n*{game.curr_qn}*{gen_list_of_players(game)}\n"
+async def prompt_voting(ctx: commands.Context, game: TrueColours, round_num):
+    view = discord.ui.View()
+    for emoji in colour_emojis:
+        button = discord.ui.Button(
+            **DEFAULT_BUTTON_PARAMS,
+            custom_id=f"JOIN_GAME|{emoji}",
+            emoji=emoji,
         )
-        initial_msg = await dm_channel.send(msg)
-        vote1_msg = await dm_channel.send("Vote 1")
-        vote2_msg = await dm_channel.send("Vote 2")
+        view.add_item(button)
 
-        await initial_msg.add_reaction("☑️")
-        game.vote_ids[initial_msg.id] = [player, 0]
-        for colour in game.colour_lookup.keys():
-            if colour == game.players[player]["colour"]:
-                continue
+    msg = (
+        f"\n**Round {round_num}/10**\n*{game.curr_qn}*{gen_list_of_players(game)}\n"
+        "Once you have voted, click to ☑️ lock your votes!"
+    )
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id="VOTE|☑️", emoji="☑️"))
+    msg = await ctx.send(msg, view=view)
+    game.vote_ids[msg.id] = [0]
 
-            await vote1_msg.add_reaction(colour)
-            await vote2_msg.add_reaction(colour)
+    view = discord.ui.View()
+    for colour in game.colour_lookup.keys():
+        button = discord.ui.Button(
+            **DEFAULT_BUTTON_PARAMS,
+            custom_id=f"VOTE|{colour}",
+            emoji=colour
+        )
+        view.add_item(button)
 
-        game.vote_ids[vote1_msg.id] = [player, 1]
-        game.vote_ids[vote2_msg.id] = [player, 2]
-
+    for idx in range(1, 3):
+        vote_msg = await ctx.send(f"Vote {idx}", view=view)
+        game.vote_ids[vote_msg.id] = [idx]
 
 def cnt_check(reaction, user):
     return reaction.emoji == "⏩"
 
 
 async def prompt_prediction(ctx, game: TrueColours, round_num):
-    qn = game.curr_qn
+    view = discord.ui.View()
+    for emoji in prediction_emojis.keys():
+        button = discord.ui.Button(
+            **DEFAULT_BUTTON_PARAMS,
+            custom_id=f"PREDICT|{emoji}",
+            emoji=emoji
+        )
+        view.add_item(button)
+    button = discord.ui.Button(**DEFAULT_BUTTON_PARAMS, custom_id=f"PREDICT|⏩", emoji="⏩")
+    view.add_item(button)
+
     prompt_msg = await ctx.send(
-        "How do you think your friends voted for you?\n💕 - Most\n💓 - Some\n💔 - None\n\n Click ⏩ when everyone is done"
+        "How do you think your friends voted for you?\n💕 - Most\n💓 - Some\n💔 - None\n\n Click ⏩ when you are done",
+        view=view
     )
 
     game.prediction_id = prompt_msg.id
-
-    for emoji in prediction_emojis.keys():
-        await prompt_msg.add_reaction(emoji)
-    await prompt_msg.add_reaction("⏩")
-    await game.wait_next.wait()
-    game.wait_next.clear()
 
 def gen_round_results_msg(game: TrueColours):
     results = ""
@@ -231,23 +246,19 @@ def gen_round_results_msg(game: TrueColours):
     return results
 
 
-async def run_game_round(ctx, game: TrueColours, round_num):
+async def run_game_round(ctx: commands.Context, game: TrueColours, round_num):
     game.reset_round()
 
     # Display prompt
     game.pick_qn()
-    await ctx.send(f"\n**Round {round_num}/10:**\n*{game.curr_qn}*")
 
     # Vote
-    await prompt_voting(game, round_num)
+    await prompt_voting(ctx, game, round_num)
     await game.tally_votes()
     game.determine_round_result()
 
-    finish_voting_msg = await ctx.send("Click me when everyone is done")
-    await finish_voting_msg.add_reaction("⏩")
-
-    await finish_voting_msg.delete()
     await prompt_prediction(ctx, game, round_num)
+    await game.wait_next.wait()
 
     # Count score
     game.assign_points()
@@ -278,7 +289,7 @@ def gen_scoreboard(game):
 
 
 @bot.command()
-async def startgame(ctx):
+async def startgame(ctx: commands.Context):
     if ctx.guild is None:
         await ctx.send("This command can only be used in a server.")
         return
@@ -286,6 +297,14 @@ async def startgame(ctx):
         return  # Ignore messages from other bots
 
     game = getGameByChannel(ctx.message.channel.id)
+    if game is None:
+        await ctx.send("Use creategame to create a game first!")
+        return
+
+    if len(game.players) == 0:
+        await ctx.send("No players to start game!")
+        return
+
     for i in range(10):
         await run_game_round(ctx, game, i + 1)
 

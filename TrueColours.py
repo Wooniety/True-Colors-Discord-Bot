@@ -5,11 +5,15 @@ import random
 
 import discord
 
+QNS_FILE = "questions.json"
+QNS_FILE = os.path.abspath(QNS_FILE)
+with open(QNS_FILE, "r") as f:
+    QUESTIONS = json.load(f)["questions"]
 
 class TrueColours:
-    def __init__(self, join_msg, channel_id) -> None:
+    def __init__(self, join_msg_id, channel_id) -> None:
         self.channel_id = channel_id
-        self.join_msg_id = join_msg
+        self.join_msg_id = join_msg_id
         self.wait_next = Event()
         self.players = {}
         self.curr_qn = ""
@@ -23,11 +27,7 @@ class TrueColours:
         self.load_qn_bank()
 
     def load_qn_bank(self):
-        qn_json = "questions.json"
-        qn_json = os.path.abspath(qn_json)
-        with open(qn_json, "r") as f:
-            data = json.load(f)
-        self.questions = data["questions"]
+        self.questions = QUESTIONS
 
     def start_game(self):
         # Reset players
@@ -66,12 +66,13 @@ class TrueColours:
     def add_colour_lookup(self, player_id, colour):
         self.colour_lookup[colour] = player_id
 
-    def add_player(self, player_id, player_name, colour, user: discord.User):
+    def add_player(self, player_id, player_name, colour, user: discord.User | discord.Member):
         self.players[player_id] = {
             "user": user,
             "name": player_name,
             "colour": colour,
             "points": 0,
+            "lock_vote": False,
             "vote1": "",  # blue
             "vote2": "",  # pink
             "prediction": None,  # most, some, none
@@ -85,9 +86,14 @@ class TrueColours:
         self.players[player_id]["points"] += points
 
     def lock_vote(self, player_id):
+        if self.players[player_id]["lock_vote"]:
+            return False
+
         self.players[player_id]["lock_vote"] = True
         if all(map(lambda x: x["lock_vote"], self.players.values())):
             self.wait_next.set()
+
+        return True
 
     def add_vote_1(self, player_id, vote):
         if self.players[player_id]["lock_vote"]:
@@ -102,7 +108,13 @@ class TrueColours:
         return True
 
     def add_prediction(self, player_id, prediction):
+        if self.players[player_id]["lock_vote"]:
+            return False
         self.players[player_id]["prediction"] = prediction
+        return True
+
+    def get_prediction(self, player_id):
+        return self.players[player_id]["prediction"]
 
     async def tally_votes(self):
         """
@@ -117,6 +129,8 @@ class TrueColours:
                     self.players[voted_player_id]["votes"] += 1
             except:
                 continue
+            finally:
+                self.players[player]["lock_vote"] = False
         self.wait_next.clear()
 
     def determine_round_result(self):
