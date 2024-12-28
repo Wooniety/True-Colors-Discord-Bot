@@ -113,7 +113,7 @@ async def predictionHandler(
 
     prediction = prediction_emojis[emoji]
     game.add_prediction(user.id, prediction)
-    await interaction.response.send_message(f"Your vote has been registered, click ⏩ to lock it in!", ephemeral=True)
+    await interaction.response.send_message(f"Your vote has been registered, click ☑️ to lock it in!", ephemeral=True)
 
 async def skipHandler(interaction: discord.Interaction, user: Union[discord.User, discord.Member], game: TrueColours):
     game.add_skipper(user.id)
