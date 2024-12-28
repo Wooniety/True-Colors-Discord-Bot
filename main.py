@@ -115,8 +115,9 @@ async def predictionHandler(
     game.add_prediction(user.id, prediction)
     await interaction.response.send_message(f"Your vote has been registered, click ⏩ to lock it in!", ephemeral=True)
 
-async def skipHandler(user: Union[discord.User, discord.Member], game: TrueColours):
+async def skipHandler(interaction: discord.Interaction, user: Union[discord.User, discord.Member], game: TrueColours):
     game.add_skipper(user.id)
+    await interaction.response.send_message(f"You have voted to skip!")
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
@@ -137,7 +138,7 @@ async def on_interaction(interaction: discord.Interaction):
     elif action == "SKIP":
         game = getGameByVoteId(channel_id, msg_id)
         if game != None:
-            await skipHandler(user, game)
+            await skipHandler(interaction, user, game)
     elif action == "VOTE":
         game = getGameByVoteId(channel_id, msg_id)
         if game != None:
